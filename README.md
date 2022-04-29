@@ -1,4 +1,4 @@
-# FASHION STORE SLIM4
+# SLIM4 FASHION STORE API
 
-Fashion Store Slim4 is PHP Backend to make fashion store API.
+Slim4 Fashion Store API is PHP Backend to make API for fashion store.
 More tutorials at [perangkatlunakku](https://perangkatlunakku.com/)
