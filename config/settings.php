@@ -9,5 +9,9 @@ return [
         'password' => 'password',
         'charset' => 'utf8',
         'collation' => 'utf8_general_ci',
-    ]
+    ],
+    'jwt' => [
+        'key' => 'secretkey',
+        'alg' => 'HS256',
+    ],
 ];
