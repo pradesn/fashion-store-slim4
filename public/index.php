@@ -2,6 +2,7 @@
 
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
 use Slim\Factory\AppFactory;
 use Cake\Validation\Validator;
 use Firebase\JWT\JWT;
@@ -15,6 +16,48 @@ $app->setBasePath('/fashion-store-slim4/public');
 
 $settings = require __DIR__ . '/../config/settings.php';
 require __DIR__ . '/../config/dependencies.php';
+
+$authMiddleware = function (Request $request, RequestHandler $handler) use ($settings) {
+    try {
+        $message = [];
+        if ($request->hasHeader('Authorization')) {
+            $header = $request->getHeader('Authorization');
+            if (!empty($header)) {
+                $bearer = trim($header[0]);
+                preg_match('/Bearer\s(\S+)/', $bearer, $matches);
+                $token = $matches[1];
+                $key = $settings['jwt']['key'];
+                $alg = $settings['jwt']['alg'];
+                $key = new Key($key, $alg);
+                $data = JWT::decode($token, $key);
+                $dateTime = new DateTimeImmutable();
+                $now = $dateTime->getTimestamp();
+
+                if ($now > $data->nbf && $now < $data->exp) {
+                    $request = $request->withAttribute('user_id', $data->user_id);
+                    $request = $request->withAttribute('user_email', $data->email);
+                } else {
+                    $message['message'] = 'Token expired';
+                }
+            }
+        } else {
+            $message['message'] = 'Unauthorized access';
+            $response = new \Slim\Psr7\Response();
+            $response->getBody()->write(json_encode($message));
+            return $response->withHeader('Content-Type', 'application-json')
+                ->withStatus(401);
+        }
+    } catch (\Exception $e) {
+        $message['message'] = $e->getMessage();
+        $response = new \Slim\Psr7\Response();
+        $response->getBody()->write(json_encode($message));
+        return $response->withHeader('Content-Type', 'application-json')
+            ->withStatus(401);
+    }
+
+    $response = $handler->handle($request);
+    return $response;
+};
 
 $app->post('/register', function (Request $request, Response $response, $args) {
     $body = $request->getBody();
@@ -125,5 +168,14 @@ $app->post('/decode', function (Request $request, Response $response) use ($sett
     $response->getBody()->write(json_encode($decode));
     return $response->withHeader('Content-Type', 'application-json');
 });
+
+$app->get('/identity', function (Request $request, Response $response) {
+    $user = User::where('id', $request->getAttribute('user_id'))
+        ->where('email', $request->getAttribute('user_email'))
+        ->first();
+    $response->getBody()->write(json_encode($user));
+    return $response->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
+})->add($authMiddleware);
 
 $app->run();
