@@ -8,6 +8,8 @@ use Cake\Validation\Validator;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use App\Models\User;
+use App\Models\Order;
+use App\Models\OrderDetail;
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -176,6 +178,42 @@ $app->get('/identity', function (Request $request, Response $response) {
     $response->getBody()->write(json_encode($user));
     return $response->withHeader('Content-Type', 'application/json')
         ->withStatus(200);
+})->add($authMiddleware);
+
+$app->post('/order', function (Request $request, Response $response) use ($capsule) {
+    $body = $request->getBody();
+    $json = json_decode($body, true);
+
+    $connection = $capsule->getConnection();
+    try {
+        $connection->beginTransaction();
+
+        $order = new Order();
+        $order->user_id = $request->getAttribute('user_id');
+        $order->user_address_id = $json['address_id'];
+        $order->status = 0;
+        $order->save();
+
+        $items = [];
+        foreach($json['item'] as $item) {
+            $item['order_id'] = $order->id;
+            $item['status'] = 0;
+            $items[] = $item;
+        }
+        OrderDetail::insert($items);
+
+        $connection->commit();
+        $message['message'] = 'Order successfully';
+        $statusCode = 201;
+    } catch (\Exception $e) {
+        $connection->rollBack();
+        $message['message'] = $e->getMessage();
+        $statusCode = 400;
+    }
+
+    $response->getBody()->write(json_encode($message));
+    return $response->withHeader('Content-Type', 'application-json')
+        ->withStatus($statusCode);
 })->add($authMiddleware);
 
 $app->run();
